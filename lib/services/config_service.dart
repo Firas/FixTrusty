@@ -285,6 +285,7 @@ class ConfigService extends ChangeNotifier {
       username: entry.username,
       password: password,
       skipVerification: entry.skipVerification,
+      certificate: entry.certificate,
       upstreamProtocol: entry.upstreamProtocol,
       antiDpi: entry.antiDpi,
       customSni: entry.customSni,
@@ -337,6 +338,7 @@ class ConfigService extends ChangeNotifier {
         username: cfg.username,
         password: cfg.password,
         skipVerification: cfg.skipVerification,
+        certificate: cfg.certificate,
         upstreamProtocol: cfg.upstreamProtocol,
         antiDpi: cfg.antiDpi,
         customSni: cfg.customSni,
@@ -864,7 +866,19 @@ class ConfigService extends ChangeNotifier {
   ];
 
   /// Refresh lists not updated for this long automatically at connect time.
-  static const Duration routingListMaxAge = Duration(hours: 24);
+  /// Short on purpose: a server-side bypass list changes whenever a domain
+  /// is added to it, and a refresh is one small HTTP GET.
+  static const Duration routingListMaxAge = Duration(minutes: 30);
+
+  /// Optional bypass list baked into a build:
+  ///   flutter build windows --dart-define=FIXTRUSTY_BYPASS_URL=https://...
+  /// When set, it is added once on first run as a General-mode list (those
+  /// domains skip the VPN); deleting it in the UI sticks. Empty by default,
+  /// so a plain build starts with no lists at all.
+  static const String serverBypassListId = 'server-bypass';
+  static const String serverBypassListUrl =
+      String.fromEnvironment('FIXTRUSTY_BYPASS_URL');
+  static const String _serverBypassSeededKey = 'seeded_server_bypass';
 
   /// Hard ceiling on how long connect may wait for list refreshes.
   static const Duration _routingRefreshBudget = Duration(seconds: 8);
@@ -1018,6 +1032,23 @@ class ConfigService extends ChangeNotifier {
     if (idx >= 0) {
       lists[idx] = lists[idx].copyWith(name: 'Default');
       await _saveRoutingLists(prefs, lists);
+    }
+    if (serverBypassListUrl.isNotEmpty &&
+        !(prefs.getBool(_serverBypassSeededKey) ?? false)) {
+      if (!lists.any((l) => l.urls.contains(serverBypassListUrl))) {
+        // No cache file yet: the first connect (or the background refresh)
+        // downloads it.
+        lists.add(const RoutingList(
+          id: serverBypassListId,
+          name: 'Server bypass list',
+          type: 'url',
+          urls: [serverBypassListUrl],
+          enabled: true,
+          appliesTo: 'general',
+        ));
+        await _saveRoutingLists(prefs, lists);
+      }
+      await prefs.setBool(_serverBypassSeededKey, true);
     }
     return lists;
   }
@@ -1231,6 +1262,27 @@ class ConfigService extends ChangeNotifier {
     await _saveRoutingLists(prefs, lists);
     notifyListeners();
     return list;
+  }
+
+  /// Re-download every enabled URL list in the background. Returns true when
+  /// the content of a list applicable in [mode] changed, i.e. a running
+  /// tunnel needs a reconnect to pick it up. Failures keep the old cache.
+  Future<bool> refreshUrlListsInBackground(VpnMode mode) async {
+    var changed = false;
+    for (final l in await loadRoutingLists()) {
+      if (!l.enabled || l.type == 'file') continue;
+      final file = File(await _routingListCachePath(l.id));
+      final before = await file.exists() ? await file.readAsString() : null;
+      try {
+        await refreshRoutingList(l.id);
+      } catch (e) {
+        debugPrint('Background refresh of ${l.name} failed: $e');
+        continue;
+      }
+      final after = await file.exists() ? await file.readAsString() : null;
+      if (after != before && l.matchesMode(mode)) changed = true;
+    }
+    return changed;
   }
 
   Future<void> deleteRoutingList(String id) async {

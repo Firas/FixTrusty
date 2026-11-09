@@ -21,6 +21,10 @@ class ServerConfig {
   final String username;
   final String password;
   final bool skipVerification;
+
+  /// Endpoint certificate chain (PEM). Empty: verified against the system
+  /// store. Filled from a deep link when the endpoint is self-signed.
+  final String certificate;
   final String upstreamProtocol;
   final bool antiDpi;
   final String dns;
@@ -51,6 +55,7 @@ class ServerConfig {
     required this.username,
     required this.password,
     this.skipVerification = false,
+    this.certificate = '',
     this.upstreamProtocol = 'http2',
     this.antiDpi = false,
     this.dns = '8.8.8.8',
@@ -101,6 +106,7 @@ class ServerConfig {
       'username': username,
       'password': password,
       'skipVerification': skipVerification,
+      'certificate': certificate,
       'upstreamProtocol': upstreamProtocol,
       'antiDpi': antiDpi,
       'dns': dns,
@@ -140,6 +146,7 @@ class ServerConfig {
       username: username,
       password: password,
       skipVerification: json['skipVerification'] as bool? ?? false,
+      certificate: json['certificate'] as String? ?? '',
       upstreamProtocol: upstreamProtocol,
       antiDpi: json['antiDpi'] as bool? ?? false,
       dns: dns,
@@ -322,7 +329,7 @@ client_random = "$crp"
 skip_verification = $skipVerif
 # Endpoint certificate in PEM format.
 # If not specified, the endpoint certificate is verified using the system storage.
-certificate = ""
+certificate = "${_tomlEscape(certificate)}"
 # Protocol to be used to communicate with the endpoint [http2, http3]
 upstream_protocol = "$upProto"
 # Is anti-DPI measures should be enabled
@@ -370,6 +377,7 @@ $listenerSection''';
     String? username,
     String? password,
     bool? skipVerification,
+    String? certificate,
     String? upstreamProtocol,
     bool? antiDpi,
     String? dns,
@@ -393,6 +401,7 @@ $listenerSection''';
       username: username ?? this.username,
       password: password ?? this.password,
       skipVerification: skipVerification ?? this.skipVerification,
+      certificate: certificate ?? this.certificate,
       upstreamProtocol: upstreamProtocol ?? this.upstreamProtocol,
       antiDpi: antiDpi ?? this.antiDpi,
       dns: dns ?? this.dns,

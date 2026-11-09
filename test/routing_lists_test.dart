@@ -13,7 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'seeded_server_bypass': true});
   });
 
   /// Point Directory.current (the base of the routing list cache) at a fresh
@@ -28,6 +28,34 @@ void main() {
     });
     return tmp;
   }
+
+  test('a build without FIXTRUSTY_BYPASS_URL starts with no lists', () async {
+    SharedPreferences.setMockInitialValues({});
+    useTempCwd();
+    final lists = await ConfigService().loadRoutingLists();
+    expect(lists, ConfigService.serverBypassListUrl.isEmpty ? isEmpty : hasLength(1));
+  });
+
+  test('first run adds the baked-in bypass list once, and a deletion sticks',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    useTempCwd();
+    final service = ConfigService();
+    var lists = await service.loadRoutingLists();
+    expect(lists, hasLength(1));
+    expect(lists.single.id, ConfigService.serverBypassListId);
+    expect(lists.single.urls, [ConfigService.serverBypassListUrl]);
+    expect(lists.single.enabled, isTrue);
+    expect(lists.single.matchesMode(VpnMode.general), isTrue);
+    expect(lists.single.matchesMode(VpnMode.selective), isFalse);
+
+    await service.deleteRoutingList(ConfigService.serverBypassListId);
+    lists = await service.loadRoutingLists();
+    expect(lists, isEmpty);
+  },
+      skip: ConfigService.serverBypassListUrl.isEmpty
+          ? 'run with --dart-define=FIXTRUSTY_BYPASS_URL=https://example.com/l.txt'
+          : false);
 
   test('validateRoutingEntries keeps domains/IPs/CIDRs/TLDs, drops garbage',
       () {
@@ -121,6 +149,7 @@ void main() {
   test('legacy single-preset keys migrate into the built-in list entry',
       () async {
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_preset_enabled': true,
       'routing_preset_count': 1200,
       'routing_preset_updated': '2026-07-01T00:00:00.000',
@@ -153,6 +182,7 @@ void main() {
     // The legacy keys are the only evidence that the old single preset was
     // in use; without them there is nothing to carry over.
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_preset_enabled': true,
       'routing_preset_count': 1204,
     });
@@ -167,6 +197,7 @@ void main() {
   test('stored builtin list with the old label is renamed to Default',
       () async {
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_lists': jsonEncode([
         const RoutingList(
           id: ConfigService.builtinRoutingListId,
@@ -187,7 +218,8 @@ void main() {
       () async {
     // A clean install has no lists, so migrate one in to have something to
     // act on.
-    SharedPreferences.setMockInitialValues({'routing_preset_enabled': false});
+    SharedPreferences.setMockInitialValues(
+        {'seeded_server_bypass': true, 'routing_preset_enabled': false});
     final service = ConfigService();
     expect(await service.loadRoutingLists(), hasLength(1));
 
@@ -345,6 +377,7 @@ EXAMPLE.COM
   test('refreshRoutingList caches the flat parsed geosite output', () async {
     final tmp = useTempCwd();
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_lists': jsonEncode([
         const RoutingList(
           id: 'gs',
@@ -376,6 +409,7 @@ EXAMPLE.COM
       () async {
     final tmp = useTempCwd();
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_lists': jsonEncode([
         const RoutingList(
           id: 'u1',
@@ -403,6 +437,7 @@ EXAMPLE.COM
       () async {
     final tmp = useTempCwd();
     SharedPreferences.setMockInitialValues({
+      'seeded_server_bypass': true,
       'routing_lists': jsonEncode([
         const RoutingList(
             id: 'a', name: 'A', type: 'file', sourcePath: 'x', enabled: true)

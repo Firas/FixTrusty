@@ -12,6 +12,7 @@ import '../services/vpn_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_snackbar.dart';
 import '../utils/connection_test.dart';
+import '../utils/deep_link.dart';
 import '../widgets/app_switch.dart';
 import '../widgets/info_banner.dart';
 import '../l10n/app_localizations.dart';
@@ -1486,13 +1487,105 @@ class _AddServerDialogState extends State<AddServerDialog> {
   final _port = TextEditingController(text: '443');
   final _username = TextEditingController();
   final _password = TextEditingController();
+  final _link = TextEditingController();
   bool _passwordVisible = false;
 
   bool _testing = false;
   ConnectionTestResult? _testResult;
 
+  /// Config decoded from a tt:// link. It carries the fields this dialog has
+  /// no inputs for (certificate, SNI, protocol, prefix...), and the visible
+  /// fields are laid over it on submit.
+  ServerConfig? _imported;
+  bool _importing = false;
+  String? _linkError;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillLinkFromClipboard();
+  }
+
+  /// A link copied just before opening the dialog lands in the field by
+  /// itself; the user still presses Import.
+  Future<void> _prefillLinkFromClipboard() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text?.trim() ?? '';
+      if (mounted && isDeepLink(text) && _link.text.isEmpty) {
+        setState(() => _link.text = text);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pasteLink() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (!mounted) return;
+    setState(() => _link.text = text);
+    if (isDeepLink(text)) await _importLink();
+  }
+
+  Future<void> _importLink() async {
+    final DeepLinkConfig link;
+    try {
+      link = parseDeepLink(_link.text);
+    } on DeepLinkException catch (e) {
+      setState(() => _linkError = e.message);
+      return;
+    }
+    if (link.addresses.isEmpty) {
+      setState(
+        () => _linkError = 'Subscription-only links are not supported yet',
+      );
+      return;
+    }
+
+    setState(() {
+      _importing = true;
+      _linkError = null;
+    });
+    final (host, _) = link.primaryAddress;
+    final ip = await _resolve(host);
+    if (!mounted) return;
+    if (ip == null) {
+      setState(() {
+        _importing = false;
+        _linkError = 'Could not resolve "$host" to an IP address';
+      });
+      return;
+    }
+
+    final cfg = link.toServerConfig(address: ip);
+    setState(() {
+      _importing = false;
+      _imported = cfg;
+      _testResult = null;
+      _name.text = cfg.name;
+      _hostname.text = cfg.hostname;
+      _address.text = cfg.address;
+      _port.text = cfg.port.toString();
+      _username.text = cfg.username;
+      _password.text = cfg.password;
+    });
+  }
+
+  /// IP literal as-is; a host name is looked up, IPv4 preferred.
+  static Future<String?> _resolve(String host) async {
+    if (InternetAddress.tryParse(host) != null) return host;
+    try {
+      final found = await InternetAddress.lookup(host);
+      if (found.isEmpty) return null;
+      final v4 = found.where((a) => a.type == InternetAddressType.IPv4);
+      return (v4.isNotEmpty ? v4.first : found.first).address;
+    } on SocketException {
+      return null;
+    }
+  }
+
   @override
   void dispose() {
+    _link.dispose();
     _name.dispose();
     _hostname.dispose();
     _address.dispose();
@@ -1524,6 +1617,7 @@ class _AddServerDialogState extends State<AddServerDialog> {
       address: address,
       port: port,
       hostname: _hostname.text.trim(),
+      hasFilteringPrefix: _imported?.clientRandomPrefix.isNotEmpty ?? false,
     );
     if (mounted) {
       setState(() {
@@ -1535,9 +1629,11 @@ class _AddServerDialogState extends State<AddServerDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final base = _imported ??
+        ServerConfig(hostname: '', address: '', username: '', password: '');
     Navigator.pop(
       context,
-      ServerConfig(
+      base.copyWith(
         name: _name.text.trim(),
         hostname: _hostname.text.trim(),
         address: _address.text.trim(),
@@ -1564,13 +1660,72 @@ class _AddServerDialogState extends State<AddServerDialog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
+                _section('Import from link'),
+                const SizedBox(height: 10),
+                _labeled(
+                  'tt:// link from your server',
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _link,
+                          style: _mono(color: theme.colorScheme.onSurface),
+                          decoration: _deco(
+                            suffix: IconButton(
+                              tooltip: 'Paste from clipboard',
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
+                              constraints: const BoxConstraints(
+                                minWidth: 34,
+                                minHeight: 34,
+                              ),
+                              icon: const Icon(Icons.content_paste),
+                              onPressed: _importing ? null : _pasteLink,
+                            ),
+                          ).copyWith(
+                            hintText: 'tt://?...',
+                            errorText: _linkError,
+                            errorMaxLines: 2,
+                          ),
+                          onSubmitted: (_) => _importLink(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: _importing ? null : _importLink,
+                        child: _importing
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Import'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_imported != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _imported!.certificate.isNotEmpty
+                        ? 'Imported, including the server certificate.'
+                        : 'Imported.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: theme.extension<StatusColors>()!.connected,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
                 _section('Server'),
                 const SizedBox(height: 10),
                 _labeled(
                   'Name (optional)',
                   TextFormField(
                     controller: _name,
-                    autofocus: true,
                     style: _mono(color: theme.colorScheme.onSurface),
                     decoration: _deco(),
                   ),

@@ -1,5 +1,6 @@
 #include "flutter_window.h"
 
+#include <cwchar>
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -27,8 +28,12 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+  // Launched at logon with --autostart: start hidden in the tray. The Dart
+  // side shows the window when the user clicks the tray icon.
+  const bool autostart =
+      wcsstr(::GetCommandLineW(), L"--autostart") != nullptr;
+  flutter_controller_->engine()->SetNextFrameCallback([this, autostart]() {
+    if (!autostart) this->Show();
   });
 
   // Flutter can complete the first frame before the "show window" callback is

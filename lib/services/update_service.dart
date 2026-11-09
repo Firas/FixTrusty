@@ -12,10 +12,10 @@ import '../utils/open_external.dart';
 /// release page in a browser. Notify-only: no download/install.
 class UpdateService extends ChangeNotifier {
   static const _latestReleaseApi =
-      'https://api.github.com/repos/Meddelin/trusty/releases/latest';
+      'https://api.github.com/repos/Firas/FixTrusty/releases/latest';
   static const _releasesPage =
-      'https://github.com/Meddelin/trusty/releases/latest';
-  static const repositoryUrl = 'https://github.com/Meddelin/trusty';
+      'https://github.com/Firas/FixTrusty/releases/latest';
+  static const repositoryUrl = 'https://github.com/Firas/FixTrusty';
   static const _timeout = Duration(seconds: 15);
 
   String? _latestVersion;
@@ -48,7 +48,7 @@ class UpdateService extends ChangeNotifier {
         final request = await client
             .getUrl(Uri.parse(_latestReleaseApi))
             .timeout(_timeout);
-        request.headers.set('User-Agent', 'Trusty');
+        request.headers.set('User-Agent', 'FixTrusty');
         request.headers.set('Accept', 'application/vnd.github+json');
         final response = await request.close().timeout(_timeout);
         if (response.statusCode != 200) {
@@ -72,7 +72,7 @@ class UpdateService extends ChangeNotifier {
         client.close();
       }
     } catch (_) {
-      // Check failures (offline, rate limit) are silent — the
+      // Check failures (offline, rate limit) are silent вЂ” the
       // banner simply doesn't appear; next check is in 24h.
     }
   }
@@ -82,7 +82,7 @@ class UpdateService extends ChangeNotifier {
   void dismiss() {
     _dismissed = true;
     notifyListeners();
-    // Fire-and-forget persistence — the banner must not reappear next launch.
+    // Fire-and-forget persistence вЂ” the banner must not reappear next launch.
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setString(_dismissedVersionKey, _latestVersion ?? ''),
     );

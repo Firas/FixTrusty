@@ -13,7 +13,7 @@ void main() {
 
   test('a failed CLI launch removes the TOML with the plaintext password',
       () async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'seeded_server_bypass': true});
     final tmp = Directory.systemTemp.createTempSync('trusty_vpn_test');
     final oldCwd = Directory.current;
     Directory.current = tmp;

@@ -72,6 +72,6 @@ void main() {
       (tester) async {
     await pumpScreen(tester, const RailFooter());
     expect(find.byTooltip('Open the project on GitHub'), findsOneWidget);
-    expect(find.byTooltip('Open the Telegram group'), findsOneWidget);
+    expect(find.byTooltip('Open fixic.net'), findsOneWidget);
   });
 }

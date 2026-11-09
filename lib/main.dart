@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -14,13 +16,13 @@ import 'screens/logs_screen.dart';
 import 'screens/server_setup_screen.dart';
 import 'services/server_setup_service.dart';
 import 'services/update_service.dart';
+import 'services/autostart_service.dart';
 import 'theme/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'utils/localization_helper.dart';
 import 'utils/open_external.dart';
 import 'widgets/app_switch.dart';
 import 'widgets/github_mark.dart';
-import 'widgets/telegram_mark.dart';
 
 // Global reference to VPN service for cleanup on process termination
 VpnService? _globalVpnService;
@@ -28,8 +30,12 @@ VpnService? _globalVpnService;
 // Global lock file for single instance check
 RandomAccessFile? _lockFile;
 
-void main() async {
+/// Started by the logon task: stay in the tray instead of opening the window.
+bool _launchedAtLogon = false;
+
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  _launchedAtLogon = args.contains(AutostartService.autostartArg);
 
   // Check for single instance - only one app should run
   if (!await _ensureSingleInstance()) {
@@ -41,7 +47,7 @@ void main() async {
     const windowOptions = WindowOptions(
       size: Size(400, 200),
       center: true,
-      title: 'Trusty VPN',
+      title: 'FixTrusty',
       skipTaskbar: false,
     );
 
@@ -73,10 +79,11 @@ void main() async {
     minimumSize: Size(850, 650),
     center: true,
     skipTaskbar: false,
-    title: 'Trusty VPN',
+    title: 'FixTrusty',
   );
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    if (_launchedAtLogon) return;
     await windowManager.show();
     await windowManager.focus();
   });
@@ -124,7 +131,7 @@ Future<bool> _ensureSingleInstance() async {
   try {
     // Get temp directory for lock file
     final tempDir = Directory.systemTemp;
-    final lockFilePath = '${tempDir.path}/trusty.lock';
+    final lockFilePath = '${tempDir.path}/fixtrusty.lock';
     final lockFile = File(lockFilePath);
 
     // Try to open the lock file exclusively
@@ -182,7 +189,7 @@ class SingleInstanceErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Trusty VPN',
+      title: 'FixTrusty',
       debugShowCheckedModeBanner: false,
       // This window used to be raw `ThemeData.light()` — Material's baseline
       // palette and type, in the one window a user only ever sees when
@@ -226,7 +233,7 @@ class _SingleInstanceNotice extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Trusty VPN is already running',
+                'FixTrusty is already running',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -280,7 +287,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<UpdateService>(create: (_) => UpdateService()),
       ],
       child: MaterialApp(
-        title: 'Trusty VPN',
+        title: 'FixTrusty',
         debugShowCheckedModeBanner: false,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -344,10 +351,74 @@ class _MainScreenState extends State<MainScreen>
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) context.read<UpdateService>().start();
     });
+
+    AutostartService.refreshIfEnabled();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoConnect());
+
+    // Keep URL routing lists (a server-side bypass list above all) fresh while
+    // the app runs, and reconnect once when a change affects the live tunnel.
+    Future.delayed(const Duration(seconds: 30), _refreshRoutingLists);
+    _listRefreshTimer = Timer.periodic(
+      ConfigService.routingListMaxAge,
+      (_) => _refreshRoutingLists(),
+    );
+  }
+
+  Timer? _listRefreshTimer;
+  bool _refreshingLists = false;
+
+  Future<void> _refreshRoutingLists() async {
+    if (!mounted || _refreshingLists) return;
+    _refreshingLists = true;
+    try {
+      final configService = context.read<ConfigService>();
+      final vpn = context.read<VpnService>();
+      final config = await configService.loadConfig();
+      final changed =
+          await configService.refreshUrlListsInBackground(config.vpnMode);
+      // The TOML is written at connect time, so a running tunnel only sees
+      // the new list after a reconnect (a second or two without VPN).
+      if (changed && mounted && vpn.status == VpnStatus.connected) {
+        await vpn.disconnect();
+        await vpn.connect(await configService.loadConfig());
+      }
+    } catch (e) {
+      debugPrint('Routing list refresh failed: $e');
+    } finally {
+      _refreshingLists = false;
+    }
+  }
+
+  /// Connect on launch when the user asked for it. At logon the network may
+  /// still be coming up, so a failed attempt is retried a few times.
+  Future<void> _autoConnect() async {
+    if (!await AutostartService.isAutoConnect()) return;
+    if (!mounted) return;
+    final vpn = context.read<VpnService>();
+    final configService = context.read<ConfigService>();
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (!mounted) return;
+      if (vpn.status != VpnStatus.disconnected &&
+          vpn.status != VpnStatus.error) {
+        return;
+      }
+      final config = await configService.loadConfig();
+      if (config.isPlaceholder) return;
+      await vpn.connect(config);
+      // connect() returns once the process is launched; give the stability
+      // check time to settle before judging the attempt.
+      await Future.delayed(const Duration(seconds: 8));
+      if (vpn.status == VpnStatus.connected ||
+          vpn.status == VpnStatus.connecting) {
+        return;
+      }
+      await Future.delayed(const Duration(seconds: 10));
+    }
   }
 
   @override
   void dispose() {
+    _listRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     trayManager.removeListener(this);
     windowManager.removeListener(this);
@@ -825,10 +896,12 @@ class RailFooter extends StatefulWidget {
 }
 
 class _RailFooterState extends State<RailFooter> {
-  static const _communityUrl = 'https://t.me/+JizbvklDJYg0Njg6';
+  static const _websiteUrl = 'https://fixic.net';
 
   /// Absent means "ask each time"; `main.dart` reads the same key on close.
   String _closeAction = 'ask';
+  bool _autostart = false;
+  bool _autoConnect = false;
 
   @override
   void initState() {
@@ -837,6 +910,39 @@ class _RailFooterState extends State<RailFooter> {
       if (!mounted) return;
       setState(() => _closeAction = prefs.getString('close_action') ?? 'ask');
     });
+    AutostartService.isEnabled().then((v) {
+      if (mounted) setState(() => _autostart = v);
+    });
+    AutostartService.isAutoConnect().then((v) {
+      if (mounted) setState(() => _autoConnect = v);
+    });
+  }
+
+  Future<void> _onMenuSelected(String value) async {
+    switch (value) {
+      case 'autostart':
+        final want = !_autostart;
+        try {
+          await AutostartService.setEnabled(want);
+          if (!mounted) return;
+          setState(() => _autostart = want);
+          // Starting hidden in the tray only makes sense if closing the
+          // window keeps the app there.
+          if (want && _closeAction == 'exit') await _setCloseAction('minimize');
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString())),
+            );
+          }
+        }
+      case 'autoconnect':
+        final want = !_autoConnect;
+        await AutostartService.setAutoConnect(want);
+        if (mounted) setState(() => _autoConnect = want);
+      default:
+        await _setCloseAction(value);
+    }
   }
 
   Future<void> _setCloseAction(String value) async {
@@ -862,7 +968,7 @@ class _RailFooterState extends State<RailFooter> {
             tooltip: l10n.settingsCloseAction,
             position: PopupMenuPosition.over,
             icon: Icon(Icons.tune, size: 18, color: scheme.onSurfaceVariant),
-            onSelected: _setCloseAction,
+            onSelected: _onMenuSelected,
             itemBuilder: (context) => [
               PopupMenuItem(
                 enabled: false,
@@ -887,6 +993,40 @@ class _RailFooterState extends State<RailFooter> {
                 ),
             ],
           ),
+          PopupMenuButton<String>(
+            tooltip: 'Startup',
+            position: PopupMenuPosition.over,
+            icon: Icon(
+              Icons.power_settings_new,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+            onSelected: _onMenuSelected,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                enabled: false,
+                height: 32,
+                child: Text(
+                  'Startup',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (AutostartService.isSupported)
+                CheckedPopupMenuItem(
+                  value: 'autostart',
+                  checked: _autostart,
+                  child: const Text('Start with Windows'),
+                ),
+              CheckedPopupMenuItem(
+                value: 'autoconnect',
+                checked: _autoConnect,
+                child: const Text('Connect on launch'),
+              ),
+            ],
+          ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -896,9 +1036,13 @@ class _RailFooterState extends State<RailFooter> {
                 icon: GitHubMark(size: 17, color: scheme.onSurfaceVariant),
               ),
               IconButton(
-                onPressed: () => openExternal(_communityUrl),
-                tooltip: 'Open the Telegram group',
-                icon: TelegramMark(size: 17, color: scheme.onSurfaceVariant),
+                onPressed: () => openExternal(_websiteUrl),
+                tooltip: 'Open fixic.net',
+                icon: Icon(
+                  Icons.language,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),

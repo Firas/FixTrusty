@@ -1,3 +1,15 @@
+FixTrusty - TrustTunnel VPN client for Windows
+Copyright 2026 fixic.net (https://fixic.net)
+
+FixTrusty is a modified version of Trusty
+(https://github.com/Meddelin/trusty), Copyright 2025 Trusty Contributors,
+licensed under the Apache License 2.0. Modifications made in 2026 with the
+help of Claude (Anthropic): tt:// deep-link import with server certificate,
+start with Windows and connect on launch, a self-updating server-side bypass
+list, and FixTrusty branding. See CHANGELOG.md for details.
+
+================================================================================
+
 Trusty - Windows Client
 Copyright 2025 Trusty Contributors
 
@@ -38,9 +50,9 @@ BUNDLED TYPEFACES
 The application embeds three typefaces, each licensed under the SIL Open Font
 License 1.1. The full licence text for each ships in assets/fonts/.
 
-Geologica — Copyright (c) The Geologica Project Authors
-Chivo Mono — Copyright (c) The Chivo Project Authors
-JetBrains Mono — Copyright (c) The JetBrains Mono Project Authors
+Geologica вЂ” Copyright (c) The Geologica Project Authors
+Chivo Mono вЂ” Copyright (c) The Chivo Project Authors
+JetBrains Mono вЂ” Copyright (c) The JetBrains Mono Project Authors
 
 The bundled files are static instances cut from the variable sources published
 at https://github.com/google/fonts using fontTools; no glyph outlines were

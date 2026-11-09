@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Trusty" "\0"
-            VALUE "FileDescription", "Trusty VPN Client" "\0"
+            VALUE "CompanyName", "FixTrusty" "\0"
+            VALUE "FileDescription", "FixTrusty VPN Client (based on Trusty)" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "trusty" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Trusty. All rights reserved." "\0"
-            VALUE "OriginalFilename", "Trusty.exe" "\0"
-            VALUE "ProductName", "Trusty" "\0"
+            VALUE "InternalName", "fixtrusty" "\0"
+            VALUE "LegalCopyright", "Based on Trusty (Apache-2.0), modified as FixTrusty" "\0"
+            VALUE "OriginalFilename", "FixTrusty.exe" "\0"
+            VALUE "ProductName", "FixTrusty" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

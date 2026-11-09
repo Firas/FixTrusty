@@ -80,7 +80,9 @@ Future<ConfigService> pumpScreen(
   Brightness brightness = Brightness.dark,
   Map<String, Object> prefs = const {},
 }) async {
-  SharedPreferences.setMockInitialValues(Map<String, Object>.from(prefs));
+  SharedPreferences.setMockInitialValues(
+      <String, Object>{'seeded_server_bypass': true, ...prefs},
+    );
   stubPlatformChannels();
 
   tester.view.physicalSize = size;

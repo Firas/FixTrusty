@@ -97,13 +97,13 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'Trusty VPN'**
+  /// **'FixTrusty'**
   String get appTitle;
 
   /// No description provided for @singleInstanceTitle.
   ///
   /// In en, this message translates to:
-  /// **'Trusty VPN is already running'**
+  /// **'FixTrusty is already running'**
   String get singleInstanceTitle;
 
   /// No description provided for @singleInstanceMessage.
@@ -145,7 +145,7 @@ abstract class AppLocalizations {
   /// No description provided for @trayTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Trusty VPN'**
+  /// **'FixTrusty'**
   String get trayTooltip;
 
   /// No description provided for @dialogCloseTitle.

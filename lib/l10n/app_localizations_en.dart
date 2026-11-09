@@ -9,10 +9,10 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Trusty VPN';
+  String get appTitle => 'FixTrusty';
 
   @override
-  String get singleInstanceTitle => 'Trusty VPN is already running';
+  String get singleInstanceTitle => 'FixTrusty is already running';
 
   @override
   String get singleInstanceMessage =>
@@ -34,7 +34,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get trayExit => 'Exit';
 
   @override
-  String get trayTooltip => 'Trusty VPN';
+  String get trayTooltip => 'FixTrusty';
 
   @override
   String get dialogCloseTitle => 'Close Application?';
