@@ -1,3 +1,5 @@
+> **FixTrusty:** only the Windows workflow (`release.yml`) is kept; the macOS release workflow was removed in this fork because the FixTrusty changes are Windows-only and untested on macOS.
+
 # Trusty — Release Instructions
 
 ## Automatic Releases

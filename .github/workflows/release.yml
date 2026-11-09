@@ -1,11 +1,9 @@
-name: Build and Release Windows
+name: Build and Release FixTrusty (Windows)
 
 on:
   push:
     tags:
       - "v*"
-    branches:
-      - fix/macos-cli-auth
   workflow_dispatch:
 
 permissions:
@@ -25,7 +23,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.38.9"
+          flutter-version: "3.47.9"
           channel: "stable"
 
       - name: Verify Flutter installation
@@ -150,7 +148,7 @@ jobs:
         run: |
           $cliVersion = (Get-Content ".\cli_version.txt" -Raw).Trim()
           @"
-          # Trusty - Windows Client
+          # FixTrusty - Windows Client
 
           ## What's Included
 
@@ -161,20 +159,15 @@ jobs:
 
           1. Extract the ZIP file to your preferred location
 
-          2. Run Trusty.exe
+          2. Run FixTrusty.exe
 
-          3. Go to Settings tab and configure your server connection:
-             - Hostname: your-vpn-server.com
-             - IP Address: your server IP
-             - Port: 443 (or your server port)
-             - Username: your username
-             - Password: your password
+          3. Servers -> Add server -> paste the tt:// link from your server -> Import -> Add
 
-          4. Click Save Settings, then go to Home tab and click Connect
+          4. Go to Home and click Connect
 
           ## What's Inside
 
-          - Trusty.exe - Main GUI application
+          - FixTrusty.exe - Main GUI application
           - client/trusttunnel_client.exe - VPN client CLI ($cliVersion)
           - client/wintun.dll - Wintun network driver (required for TUN mode)
           - client/trusttunnel_client.toml.example - Configuration example
@@ -197,7 +190,7 @@ jobs:
           ## Support
 
           For issues and questions:
-          https://github.com/Meddelin/trusty/issues
+          https://github.com/Firas/FixTrusty/issues
 
           ## License
 
@@ -208,7 +201,7 @@ jobs:
       - name: Create ZIP archive
         run: |
           $version = "${{ github.ref_name }}" -replace '/', '-'
-          $archiveName = "Trusty-Windows-$version.zip"
+          $archiveName = "FixTrusty-Windows-$version.zip"
           Compress-Archive -Path .\release-package\* -DestinationPath $archiveName -Force
           Write-Host "Created archive: $archiveName"
           Get-ChildItem $archiveName | Select-Object Name, Length
@@ -237,13 +230,13 @@ jobs:
           $notes = $notes.Trim()
           if (-not $notes) {
             Write-Host "No CHANGELOG section for $version; falling back to a link."
-            $notes = "See the [changelog](https://github.com/Meddelin/trusty/blob/main/CHANGELOG.md)."
+            $notes = "See the [changelog](https://github.com/Firas/FixTrusty/blob/main/CHANGELOG.md)."
           }
 
           # No backticks below: inside a PowerShell here-string a backtick is an
           # escape character, so a markdown code span would be eaten.
           $changelog = @"
-          ## Trusty $version
+          ## FixTrusty $version
 
           $notes
 
@@ -251,8 +244,8 @@ jobs:
 
           1. Download the ZIP below
           2. Extract it wherever you like
-          3. Run Trusty.exe
-          4. Add a server on the Servers tab, or deploy one from the Deploy tab
+          3. Run FixTrusty.exe
+          4. Servers -> Add server -> paste your tt:// link -> Import
           5. Press Connect
 
           The TrustTunnel CLI ($cliVersion) and the Wintun driver are bundled, so there is nothing else to download.
@@ -265,13 +258,16 @@ jobs:
 
           ### Documentation
 
-          - [README](https://github.com/Meddelin/trusty/blob/main/README.md)
-          - [Configuration guide](https://github.com/Meddelin/trusty/blob/main/CONFIGURATION.md)
-          - [Building from source](https://github.com/Meddelin/trusty/blob/main/BUILDING.md)
+          - [README](https://github.com/Firas/FixTrusty/blob/main/README.md)
+          - [Configuration guide](https://github.com/Firas/FixTrusty/blob/main/CONFIGURATION.md)
+          - [Building from source](https://github.com/Firas/FixTrusty/blob/main/BUILDING.md)
 
           ### Related projects
 
           - [TrustTunnel protocol](https://github.com/TrustTunnel/TrustTunnel)
+          - [Trusty](https://github.com/Meddelin/trusty) (the original this fork is based on)
+
+          Reworked with the help of Claude (Anthropic). Website: https://fixic.net
           "@
 
           $changelog | Out-File -FilePath changelog.md -Encoding UTF8
@@ -287,12 +283,9 @@ jobs:
         with:
           # Without this the release is titled with the bare tag. Derived from
           # the tag rather than written out, so it cannot go stale.
-          name: Trusty ${{ github.ref_name }}
+          name: FixTrusty ${{ github.ref_name }}
           files: |
-            Trusty-Windows-*.zip
-          # Both workflows publish into the same release; append so the
-          # last-finishing job doesn't wipe the other's description.
-          append_body: true
+            FixTrusty-Windows-*.zip
           body_path: changelog.md
           draft: false
           prerelease: false
@@ -312,5 +305,5 @@ jobs:
         with:
           name: windows-build-${{ steps.upload.outputs.safe_ref }}
           path: |
-            Trusty-Windows-*.zip
+            FixTrusty-Windows-*.zip
           retention-days: 30
